@@ -118,6 +118,16 @@ class DesktopClamAV:
     def _libraries(self):
         return sorted({path.parent for path in self.engine.rglob("libfreshclam.so*")})
 
+    def _environment(self):
+        environment = child_environment(self._libraries())
+        certificate = next(self.engine.rglob("clamav.crt"), None)
+        if certificate:
+            reject_links(certificate)
+            environment["CVD_CERTS_DIR"] = str(certificate.parent)
+        elif sys.platform == "linux":
+            raise ValueError("The portable engine is missing its ClamAV definition certificate.")
+        return environment
+
     def _definitions_ready(self):
         return all(any((self.database / (name + suffix)).is_file() for suffix in (".cvd", ".cld"))
                    for name in ("main", "daily"))
@@ -125,7 +135,10 @@ class DesktopClamAV:
     def scanner(self):
         executable = self._binary("clamscan")
         if executable and self._definitions_ready():
-            return Scanner(executable, self.database, child_environment(self._libraries()))
+            try:
+                return Scanner(executable, self.database, self._environment())
+            except (OSError, ValueError):
+                pass
         # Distro-managed ClamAV is also available to Linux desktop users.
         system = shutil.which("clamscan") if sys.platform == "linux" else None
         return Scanner(Path(system), None, child_environment()) if system else None
@@ -193,7 +206,7 @@ class DesktopClamAV:
             config.write_text(settings, encoding="utf-8")
             result = subprocess.run([
                 str(freshclam), "--stdout", "--config-file=" + str(config), "--datadir=" + str(self.database),
-            ], cwd=freshclam.parent, env=child_environment(self._libraries()), capture_output=True,
+            ], cwd=freshclam.parent, env=self._environment(), capture_output=True,
                 text=True, encoding="utf-8", errors="replace", timeout=1200,
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), check=False)
         if result.returncode or not self._definitions_ready():

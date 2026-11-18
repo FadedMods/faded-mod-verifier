@@ -183,8 +183,14 @@ class DesktopClamAV:
         progress("Downloading current ClamAV malware definitions…")
         with tempfile.TemporaryDirectory(prefix="freshclam-", dir=self.root) as directory:
             config = Path(directory) / "freshclam.conf"
-            config.write_text("DatabaseMirror database.clamav.net\nConnectTimeout 30\nReceiveTimeout 120\nMaxAttempts 2\n",
-                              encoding="ascii")
+            settings = "DatabaseMirror database.clamav.net\nConnectTimeout 30\nReceiveTimeout 120\nMaxAttempts 2\n"
+            if sys.platform == "linux":
+                import pwd
+                owner = pwd.getpwuid(os.getuid()).pw_name
+                if not owner or any(char.isspace() for char in owner):
+                    raise ValueError("ClamAV setup needs a valid local account name.")
+                settings += f"DatabaseOwner {owner}\n"
+            config.write_text(settings, encoding="utf-8")
             result = subprocess.run([
                 str(freshclam), "--stdout", "--config-file=" + str(config), "--datadir=" + str(self.database),
             ], cwd=freshclam.parent, env=child_environment(self._libraries()), capture_output=True,
@@ -192,5 +198,5 @@ class DesktopClamAV:
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), check=False)
         if result.returncode or not self._definitions_ready():
             lines = (result.stdout + "\n" + result.stderr).splitlines()
-            error = next((line for line in reversed(lines) if "error" in line.lower()), "")
-            raise ValueError("ClamAV could not finish updating its definitions. " + error[:250])
+            errors = [line for line in lines if "error" in line.lower() or "warning" in line.lower()]
+            raise ValueError("ClamAV could not finish updating its definitions.\n" + "\n".join(errors[:4])[:650])

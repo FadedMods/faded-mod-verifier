@@ -26,6 +26,7 @@ jobs:
           - os: ubuntu-22.04
             platform: linux-x86_64
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -51,7 +52,8 @@ jobs:
       - name: Exercise the standalone Linux app
         if: runner.os == 'Linux'
         run: |
-          xvfb-run -a ./dist/FadedModVerifier --desktop-smoke "$RUNNER_TEMP/desktop-smoke.json"
+          python -c 'from pathlib import Path; import sys; from faded_mod_verifier.desktop_clamav import DesktopClamAV; DesktopClamAV(Path(sys.argv[1])).setup(print)' "$RUNNER_TEMP/verifier-clamav"
+          xvfb-run -a ./dist/FadedModVerifier --desktop-smoke "$RUNNER_TEMP/desktop-smoke.json" "$RUNNER_TEMP/verifier-clamav"
           cat "$RUNNER_TEMP/desktop-smoke.json"
           tar -C dist -czf dist/FadedModVerifier-0.2.0-linux-x86_64.tar.gz FadedModVerifier
       - uses: actions/upload-artifact@v4

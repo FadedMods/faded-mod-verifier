@@ -2,11 +2,22 @@
 
 Verify a downloaded mod ZIP or a mod folder on disk, including a Steam Workshop subscription. The verifier checks archive paths and file integrity, runs ClamAV and YARA locally, and can compare the contents with a reference you trust. It reads the mod as data and scans a temporary copy.
 
-## Install
+## Windows and Linux desktop apps
+
+- **Windows x64** users can download and open `FadedModVerifier-0.2.0-windows-x64.exe`.
+- **Linux x86_64** users can extract `FadedModVerifier-0.2.0-linux-x86_64.tar.gz` and open `FadedModVerifier` in their file manager. The build targets Ubuntu 22.04 and compatible graphical desktops with X11 or XWayland.
+
+[Get desktop v0.2.0](https://github.com/FadedMods/faded-mod-verifier/releases/tag/v0.2.0)
+
+The desktop builds include Python, the drag-and-drop interface and YARA. Select **Set up ClamAV** once to download the official engine and current signatures into your user data folder. This step needs internet access and no administrator rights. You can select **Update ClamAV** later. Linux also recognizes a working system ClamAV installation.
+
+Drop a ZIP or Steam mod folder into the app, or browse for it, then select **Scan mod**. You can also enter a trusted SHA-256 or choose a reference ZIP or folder to compare files. The app shows separate ClamAV, YARA and integrity results. Mod files are read and scanned locally.
+
+## Command-line install
 
 Use Python 3.10 or newer and install the release with its YARA support.
 
-    python -m pip install "faded-mod-verifier[scan] @ https://github.com/FadedMods/faded-mod-verifier/releases/download/v0.1.0/faded_mod_verifier-0.1.0-py3-none-any.whl"
+    python -m pip install "faded-mod-verifier[scan] @ https://github.com/FadedMods/faded-mod-verifier/releases/download/v0.2.0/faded_mod_verifier-0.2.0-py3-none-any.whl"
 
 Install ClamAV and update its signature database. The verifier uses the `clamscan` executable from your PATH. On Windows you can also provide the full path to `clamscan.exe` with `--clamscan`. [ClamAV installation](https://docs.clamav.net/manual/Installing.html) · [Signature updates](https://docs.clamav.net/manual/Usage/SignatureManagement.html)
 
@@ -50,6 +61,10 @@ For GitHub and HTTPS releases connected to Faded Mods, you can point the release
 - `2` means a required inspection or scan was incomplete.
 
 Use `python -m faded_mod_verifier` if the command is unavailable on your PATH. From a checkout, install it with `python -m pip install -e ".[scan]"` and run the tests with `python -m unittest discover -s tests`.
+
+## Build the desktop app
+
+The [desktop workflow](.github/workflows/desktop.yml) builds and checks both native executables using Python 3.12. It pins the desktop dependencies in [requirements-desktop.txt](requirements-desktop.txt). ClamAV is installed separately by the app from the [official release](https://github.com/Cisco-Talos/clamav/releases/tag/clamav-1.5.5).
 
 ## License
 

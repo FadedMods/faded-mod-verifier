@@ -1,21 +1,12 @@
 """Command-line interface for local mod verification and Workshop ZIP preparation."""
 import argparse
 import json
-import os
 from pathlib import Path
 import re
-import tempfile
-from zipfile import BadZipFile
-from zlib import error as CompressionError
 
+from . import __version__
 from .community_package import export_workshop_zip, verify_zip
-from .inspection import capture, compare, inventory, scan_targets
-from .package_safety import PackageSafetyError
-from .scanning import clamav, yara_scan
-
-
-def absolute(path):
-    return Path(os.path.abspath(path.expanduser()))
+from .verification import INSPECTION_ERRORS, absolute, verify_mod
 
 
 def expected_sha256(value):
@@ -24,47 +15,9 @@ def expected_sha256(value):
     return value.lower()
 
 
-def verify(arguments):
-    source = absolute(arguments.source)
-    with tempfile.TemporaryDirectory(prefix="faded-mod-verifier-") as directory:
-        workspace = Path(directory).resolve(strict=True)
-        snapshot = workspace / "mod"
-        digest, payload = capture(source, snapshot)
-        layout, contents = inventory(snapshot, payload)
-        trusted = None
-        if arguments.compare:
-            baseline = workspace / "reference"
-            _, reference = capture(absolute(arguments.compare), baseline)
-            _, trusted = inventory(baseline, reference)
-        integrity = {"status": "passed", "layout": layout, "sha256": digest, "files": len(payload)}
-        hashes = {"status": "reference-required"}
-        if arguments.expected_sha256:
-            if digest is None:
-                raise PackageSafetyError("Use --compare to verify an installed folder against a reference.")
-            hashes = {"status": "passed" if digest == arguments.expected_sha256 else "mismatch",
-                      "expected_sha256": arguments.expected_sha256}
-        comparison = compare(contents, trusted) if trusted is not None else {"status": "reference-required"}
-        scans = {"clamav": {"status": "skipped"}, "yara": {"status": "skipped"}}
-        if not arguments.inspect_only:
-            try:
-                targets = scan_targets(snapshot, payload, workspace / "nested")
-            except (OSError, ValueError, RuntimeError, BadZipFile, CompressionError) as exc:
-                scans = {engine: {"status": "incomplete", "reason": str(exc)} for engine in scans}
-            else:
-                scans["clamav"] = clamav(targets, workspace, arguments.clamscan)
-                scans["yara"] = yara_scan(targets, arguments.yara_rules)
-        report = {"integrity": integrity, "archive_hash": hashes, "file_comparison": comparison, "scans": scans}
-        if arguments.inventory:
-            report["inventory"] = contents
-        statuses = {item["status"] for item in (hashes, comparison, *scans.values())}
-        if statuses & {"mismatch", "flagged"}:
-            return report, 1
-        return report, 2 if "incomplete" in statuses else 0
-
-
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="faded-mod-verifier", description="Verify local mod ZIPs and folders.")
-    parser.add_argument("--version", action="version", version="%(prog)s 0.1.0")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     commands = parser.add_subparsers(dest="command", required=True)
     check = commands.add_parser("verify", help="Check local integrity, malware signatures and optional fidelity.")
     check.add_argument("source", type=Path, help="A ZIP-format download or installed mod folder.")
@@ -88,8 +41,10 @@ def main(argv=None):
             print(f"Prepared {output}")
             print(f"SHA-256  {verify_zip(output)['sha256']}")
             return 0
-        report, code = verify(arguments)
-    except (OSError, ValueError, RuntimeError, BadZipFile, CompressionError) as exc:
+        report, code = verify_mod(arguments.source, reference=arguments.compare, expected_sha256=arguments.expected_sha256,
+                                  inspect_only=arguments.inspect_only, include_inventory=arguments.inventory,
+                                  clamscan=arguments.clamscan, yara_rules=arguments.yara_rules)
+    except INSPECTION_ERRORS as exc:
         report, code = {"integrity": {"status": "incomplete", "reason": str(exc)}}, 2
     if getattr(arguments, "json", False):
         print(json.dumps(report, indent=2, sort_keys=True))

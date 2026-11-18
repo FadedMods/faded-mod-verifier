@@ -10,7 +10,7 @@ def _result(status, **details):
     return {"status": status, **details}
 
 
-def clamav(targets, directory, executable):
+def clamav(targets, directory, executable, *, database=None, environment=None):
     engine = shutil.which(executable)
     if not engine:
         return _result("incomplete", reason="ClamAV clamscan was not found.")
@@ -25,12 +25,17 @@ def clamav(targets, directory, executable):
     listing = directory / "clamav-inputs.txt"
     listing.write_text("\n".join(str(path) for path, _ in targets if path.stat().st_size) + "\n", encoding="utf-8")
     try:
-        scan = subprocess.run([
+        command = [
             engine, "--stdout", "--no-summary", "--scan-archive=yes",
             "--alert-encrypted=yes", "--alert-exceeds-max=yes", "--max-filesize=256M",
             "--max-scansize=512M", "--max-recursion=8", "--max-files=50000",
             "--file-list=" + str(listing),
-        ], capture_output=True, encoding="utf-8", errors="replace", timeout=1200, check=False)
+        ]
+        if database is not None:
+            command.extend(("--database=" + str(database), "--official-db-only=yes"))
+        scan = subprocess.run(command, env=environment, capture_output=True, encoding="utf-8",
+                              errors="replace", timeout=1200, check=False,
+                              creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     except (OSError, subprocess.TimeoutExpired) as exc:
         return _result("incomplete", reason=str(exc))
     findings = []

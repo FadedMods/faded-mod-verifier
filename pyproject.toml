@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "faded-mod-verifier"
+version = "0.1.0"
+description = "Local malware and file-integrity checks for mod ZIPs and Steam Workshop folders"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "FadedMods" }]
+
+[project.optional-dependencies]
+scan = ["yara-python>=4.5,<5"]
+
+[project.urls]
+Repository = "https://github.com/FadedMods/faded-mod-verifier"
+Issues = "https://github.com/FadedMods/faded-mod-verifier/issues"
+
+[project.scripts]
+faded-mod-verifier = "faded_mod_verifier.cli:main"
+
+[tool.setuptools.package-data]
+faded_mod_verifier = ["baseline.yar"]
